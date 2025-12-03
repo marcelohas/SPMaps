@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
     
     <!-- PWA Settings -->
+    <!-- Vite irá substituir /manifest.json por /SPMaps/manifest.json automaticamente -->
     <link rel="manifest" href="/manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -19,7 +20,7 @@
       window.process = window.process || { env: {} };
     </script>
     
-    <!-- Tailwind via CDN for simplicity in this setup -->
+    <!-- Tailwind via CDN (Produção: Recomendado instalar, mas CDN funciona para demo) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -39,30 +40,22 @@
       }
     </script>
     <style>
-      /* Custom scrollbar for a cleaner look */
-      ::-webkit-scrollbar {
-        width: 6px;
-      }
-      ::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #d4af37;
-        border-radius: 3px;
-      }
-      /* Marker labels */
-      .gm-style .gm-style-iw-c {
-        font-family: 'Inter', sans-serif;
-        padding: 0;
-      }
-      /* Full screen map fixes */
-      html, body, #root {
-        height: 100%;
-        margin: 0;
-        padding: 0;
+      ::-webkit-scrollbar { width: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #d4af37; border-radius: 3px; }
+      .gm-style .gm-style-iw-c { font-family: 'Inter', sans-serif; padding: 0; }
+      html, body, #root { height: 100%; margin: 0; padding: 0; }
+      
+      #diagnostic-overlay {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: white; color: red;
+        z-index: 9999; padding: 20px;
+        overflow: auto;
       }
     </style>
-<script type="importmap">
+  <script type="importmap">
 {
   "imports": {
     "react": "https://aistudiocdn.com/react@^19.2.0",
@@ -74,9 +67,29 @@
   }
 }
 </script>
+<link rel="stylesheet" href="/index.css">
 </head>
   <body class="bg-history-paper text-gray-900 overflow-hidden select-none">
     <div id="root"></div>
+    
+    <div id="diagnostic-overlay">
+      <h2 style="font-size: 24px; font-weight: bold; margin-bottom: 10px;">Diagnóstico de Erro</h2>
+      <p style="color: #333; margin-bottom: 20px;">Se você está vendo isso, o app falhou ao iniciar.</p>
+      <pre id="error-log" style="background: #eee; padding: 10px; border: 1px solid #ccc; white-space: pre-wrap;"></pre>
+    </div>
+
+    <script>
+      window.onerror = function(msg, url, line, col, error) {
+        // Ignora erros de ResizeObserver que são comuns e inofensivos
+        if(msg.includes('ResizeObserver')) return;
+        
+        document.getElementById('diagnostic-overlay').style.display = 'block';
+        const log = document.getElementById('error-log');
+        log.innerText += `[Erro Global]: ${msg}\nLocal: ${url}:${line}\n\n`;
+      };
+    </script>
+
+    <!-- Ponto de entrada do App - Vite irá processar este link -->
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
