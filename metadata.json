@@ -1,0 +1,7 @@
+{
+  "name": "Sampa Histórica AI",
+  "description": "Um guia histórico inteligente para São Paulo que usa IA para narrar a história do local onde você está.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

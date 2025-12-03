@@ -1,0 +1,313 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import MapDisplay from './components/MapDisplay';
+import HistoryPanel from './components/HistoryPanel';
+import DidYouKnowPopup from './components/DidYouKnowPopup';
+import DrivingOverlay from './components/DrivingOverlay';
+import { fetchHistoricalContext, generateVoiceNarration, generateEmailItinerary } from './services/geminiService';
+import { GeoLocation, HistoricalPlace, AppState } from './types';
+
+const App: React.FC = () => {
+  const [userLocation, setUserLocation] = useState<GeoLocation | null>(null);
+  const [places, setPlaces] = useState<HistoricalPlace[]>([]);
+  const [aiText, setAiText] = useState<string>("");
+  const [highlightText, setHighlightText] = useState<string | undefined>(undefined);
+  const [showHighlightPopup, setShowHighlightPopup] = useState<boolean>(false);
+  const [appState, setAppState] = useState<AppState>(AppState.IDLE);
+  const [selectedPlace, setSelectedPlace] = useState<HistoricalPlace | null>(null);
+  const [tracking, setTracking] = useState<boolean>(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  
+  // New States for Driving Mode
+  const [drivingMode, setDrivingMode] = useState<boolean>(false);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
+  const [isGeneratingEmail, setIsGeneratingEmail] = useState<boolean>(false);
+  
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const lastAnalyzedLocation = useRef<GeoLocation | null>(null);
+  const wakeLockRef = useRef<any>(null);
+
+  // Initialize Audio Context
+  useEffect(() => {
+    const AudioContextConstructor = window.AudioContext || (window as any).webkitAudioContext;
+    audioContextRef.current = new AudioContextConstructor({ sampleRate: 24000 });
+    return () => {
+      audioContextRef.current?.close();
+    };
+  }, []);
+
+  // Wake Lock Logic (Keep Screen On during Driving Mode)
+  useEffect(() => {
+    const requestWakeLock = async () => {
+      if (drivingMode && 'wakeLock' in navigator) {
+        try {
+          wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+          console.log('Wake Lock active');
+        } catch (err) {
+          console.error(`${err} - Wake Lock failed`);
+        }
+      } else {
+        if (wakeLockRef.current) {
+          wakeLockRef.current.release();
+          wakeLockRef.current = null;
+        }
+      }
+    };
+
+    requestWakeLock();
+
+    return () => {
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release();
+      }
+    };
+  }, [drivingMode]);
+
+  // Audio Playback Logic
+  const playAudio = useCallback((buffer: AudioBuffer) => {
+    if (!audioContextRef.current) return;
+    
+    // Stop previous
+    if (audioSourceRef.current) {
+      try { audioSourceRef.current.stop(); } catch(e) {}
+    }
+
+    const source = audioContextRef.current.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioContextRef.current.destination);
+    source.onended = () => setIsPlaying(false);
+    
+    audioSourceRef.current = source;
+    source.start();
+    setIsPlaying(true);
+  }, []);
+
+  const stopAudio = useCallback(() => {
+    if (audioSourceRef.current) {
+      try { audioSourceRef.current.stop(); } catch(e) {}
+      setIsPlaying(false);
+    }
+  }, []);
+
+  // Geolocation handling
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setErrorMsg("Geolocalização não suportada.");
+      return;
+    }
+
+    const handleSuccess = (position: GeolocationPosition) => {
+      const { latitude, longitude, heading } = position.coords;
+      const newLoc = { lat: latitude, lng: longitude, heading };
+      setUserLocation(newLoc);
+      
+      if (appState === AppState.IDLE) setAppState(AppState.READY);
+    };
+
+    const handleError = () => {
+      setErrorMsg("Permissão de GPS necessária.");
+      setAppState(AppState.ERROR);
+    };
+
+    let watchId: number;
+    if (tracking || drivingMode) {
+      watchId = navigator.geolocation.watchPosition(handleSuccess, handleError, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 5000
+      });
+    } else {
+      navigator.geolocation.getCurrentPosition(handleSuccess, handleError);
+    }
+
+    return () => {
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+    };
+  }, [tracking, drivingMode, appState]);
+
+  // Main Action: Analyze Surroundings
+  const handleExplore = useCallback(async (location: GeoLocation, isAuto: boolean = false) => {
+    setAppState(AppState.ANALYZING);
+    if (!isAuto) {
+        setAiText("");
+        setHighlightText(undefined);
+        setShowHighlightPopup(false);
+        setSelectedPlace(null);
+    }
+    setErrorMsg(null);
+
+    try {
+      // 1. Fetch Text & Places
+      const result = await fetchHistoricalContext(location.lat, location.lng, drivingMode);
+      
+      setAiText(result.text);
+      // Append new places to history, avoiding duplicates by ID
+      setPlaces(prev => {
+        const newPlaces = result.places.filter(np => !prev.some(op => op.id === np.id));
+        return [...prev, ...newPlaces];
+      });
+      
+      setAppState(AppState.READY);
+      lastAnalyzedLocation.current = location;
+
+      if (result.highlight) {
+        setHighlightText(result.highlight);
+        
+        // 2. If Driving Mode, Generate & Play Audio Automatically
+        if (drivingMode) {
+          // Subtle notification instead of popup
+          setShowHighlightPopup(false); 
+          
+          try {
+             const buffer = await generateVoiceNarration(result.highlight);
+             setAudioBuffer(buffer);
+             playAudio(buffer);
+          } catch (audioErr) {
+             console.error("Audio gen failed", audioErr);
+          }
+        } else {
+          // Standard Mode: Show popup
+          setShowHighlightPopup(true);
+        }
+      }
+      
+    } catch (err) {
+      console.error(err);
+      if (!isAuto) setErrorMsg("Erro ao conectar à história.");
+      setAppState(AppState.ERROR);
+    }
+  }, [drivingMode, playAudio]);
+
+  // Auto-Explore in Driving Mode
+  useEffect(() => {
+    if (!drivingMode || !userLocation || appState === AppState.ANALYZING) return;
+
+    if (!lastAnalyzedLocation.current) {
+        handleExplore(userLocation, true);
+    }
+
+  }, [drivingMode, userLocation, appState, handleExplore]);
+
+
+  // Email Itinerary
+  const handleEmailGeneration = async () => {
+    setIsGeneratingEmail(true);
+    try {
+        const body = await generateEmailItinerary(places);
+        const subject = encodeURIComponent("Meu Roteiro: Sampa Histórica AI");
+        const bodyEncoded = encodeURIComponent(body);
+        window.location.href = `mailto:?subject=${subject}&body=${bodyEncoded}`;
+    } catch (e) {
+        console.error(e);
+        setErrorMsg("Erro ao gerar roteiro.");
+    } finally {
+        setIsGeneratingEmail(false);
+    }
+  };
+
+  return (
+    <div className="relative w-full h-full bg-gray-100 overflow-hidden flex flex-col">
+      
+      {/* Header / Top Bar */}
+      <div className={`absolute top-0 left-0 right-0 z-30 p-4 transition-all duration-300 ${drivingMode ? '-translate-y-full' : 'translate-y-0'}`}>
+        <div className="bg-white/90 backdrop-blur shadow-lg rounded-2xl p-3 flex justify-between items-center pointer-events-auto">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 bg-history-gold rounded-full flex items-center justify-center text-white font-bold">
+              SP
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-gray-900 leading-tight">Sampa Histórica</h1>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide">AI Copilot</p>
+            </div>
+          </div>
+          
+          <button 
+            onClick={() => setDrivingMode(true)}
+            className="flex items-center space-x-1 px-3 py-1.5 bg-blue-600 text-white rounded-full text-xs font-bold shadow-md active:scale-95 transition-transform"
+          >
+            <span>🚗 Modo Direção</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Driving Mode Exit Button */}
+      {drivingMode && (
+         <button 
+            onClick={() => {
+                setDrivingMode(false);
+                stopAudio();
+            }}
+            className="absolute top-4 right-4 z-50 bg-red-500 text-white px-4 py-2 rounded-full shadow-lg font-bold text-sm hover:bg-red-600 transition-colors"
+         >
+            Sair
+         </button>
+      )}
+
+      {/* Map Layer */}
+      <div className="absolute inset-0 z-0">
+        <MapDisplay 
+          userLocation={userLocation} 
+          places={places}
+          onSelectPlace={setSelectedPlace}
+        />
+      </div>
+
+      {/* Driving Overlay (HUD) */}
+      {drivingMode && (
+          <DrivingOverlay 
+            highlightText={highlightText}
+            isPlaying={isPlaying}
+            onStopAudio={stopAudio}
+            onReplayAudio={() => audioBuffer && playAudio(audioBuffer)}
+          />
+      )}
+
+      {/* Standard Mode Pop-up */}
+      {!drivingMode && showHighlightPopup && highlightText && (
+        <DidYouKnowPopup 
+          text={highlightText} 
+          onClose={() => setShowHighlightPopup(false)} 
+        />
+      )}
+
+      {/* Error Toast */}
+      {errorMsg && (
+        <div className="absolute top-24 left-4 right-4 z-50 bg-red-50 text-red-600 p-3 rounded-xl border border-red-200 shadow-lg text-sm text-center">
+          {errorMsg}
+        </div>
+      )}
+
+      {/* Standard Mode Action Button */}
+      {!drivingMode && !selectedPlace && !showHighlightPopup && appState !== AppState.ANALYZING && (
+        <div className="absolute bottom-64 left-0 right-0 z-10 flex justify-center pointer-events-none">
+          <button
+            onClick={() => userLocation && handleExplore(userLocation)}
+            disabled={!userLocation}
+            className="pointer-events-auto shadow-2xl bg-history-gold hover:bg-yellow-600 text-white font-serif font-bold text-lg py-3 px-8 rounded-full transform transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 ring-4 ring-white/30"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+            </svg>
+            <span>Explorar História Aqui</span>
+          </button>
+        </div>
+      )}
+
+      {/* Standard Mode Info Panel */}
+      {!drivingMode && (
+        <HistoryPanel 
+            text={aiText} 
+            selectedPlace={selectedPlace} 
+            loading={appState === AppState.ANALYZING}
+            onClosePlace={() => setSelectedPlace(null)}
+            places={places}
+            onGenerateEmail={handleEmailGeneration}
+            isGeneratingEmail={isGeneratingEmail}
+        />
+      )}
+    </div>
+  );
+};
+
+export default App;
