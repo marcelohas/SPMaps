@@ -25,17 +25,19 @@ const MapDisplay: React.FC<MapDisplayProps> = ({ userLocation, places, onSelectP
   const searchBoxRef = useRef<any>(null);
   
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [destination, setDestination] = useState<string>("");
+  const apiKey = process.env.API_KEY;
 
   // Load Google Maps Script
   useEffect(() => {
+    if (!apiKey) return; // Don't load if no key
+
     if (window.google && window.google.maps) {
       setMapLoaded(true);
       return;
     }
 
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.API_KEY}&libraries=places,marker`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,marker`;
     script.async = true;
     script.defer = true;
     
@@ -44,7 +46,7 @@ const MapDisplay: React.FC<MapDisplayProps> = ({ userLocation, places, onSelectP
     };
 
     document.head.appendChild(script);
-  }, []);
+  }, [apiKey]);
 
   // Initialize Map
   useEffect(() => {
@@ -166,8 +168,6 @@ const MapDisplay: React.FC<MapDisplayProps> = ({ userLocation, places, onSelectP
     }
 
     // Dynamic Camera Logic
-    // If we are actively navigating (route set), we might want to keep the camera locked tighter.
-    // For now, keep the standard follow logic.
     googleMapRef.current.panTo(pos);
     
     if (userLocation.heading !== null && userLocation.heading !== undefined) {
@@ -214,6 +214,14 @@ const MapDisplay: React.FC<MapDisplayProps> = ({ userLocation, places, onSelectP
       markersRef.current.push(marker);
     });
   }, [places, onSelectPlace]);
+
+  if (!apiKey) {
+      return (
+          <div className="w-full h-full flex items-center justify-center bg-gray-100">
+             <p className="text-gray-500">Mapa indisponível (Chave não configurada)</p>
+          </div>
+      );
+  }
 
   return (
     <div className="relative w-full h-full">

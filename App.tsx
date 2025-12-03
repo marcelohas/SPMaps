@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Component, ErrorInfo, ReactNode } from 'react';
 import MapDisplay from './components/MapDisplay';
 import HistoryPanel from './components/HistoryPanel';
 import DidYouKnowPopup from './components/DidYouKnowPopup';
@@ -6,7 +6,54 @@ import DrivingOverlay from './components/DrivingOverlay';
 import { fetchHistoricalContext, generateVoiceNarration, generateEmailItinerary } from './services/geminiService';
 import { GeoLocation, HistoricalPlace, AppState } from './types';
 
-const App: React.FC = () => {
+// --- Error Boundary Component ---
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Uncaught error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="w-full h-screen flex flex-col items-center justify-center bg-red-50 p-6 text-center">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Algo deu errado</h1>
+          <p className="text-gray-700 mb-4">Ocorreu um erro inesperado ao carregar o aplicativo.</p>
+          <div className="bg-white p-4 rounded shadow border border-red-200 text-left overflow-auto max-w-full">
+             <code className="text-xs text-red-800 font-mono break-all">
+               {this.state.error?.toString()}
+             </code>
+          </div>
+          <button 
+            onClick={() => window.location.reload()}
+            className="mt-6 px-6 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700"
+          >
+            Tentar Novamente
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+// --- Main App Component ---
+const AppContent: React.FC = () => {
   const [userLocation, setUserLocation] = useState<GeoLocation | null>(null);
   const [places, setPlaces] = useState<HistoricalPlace[]>([]);
   const [aiText, setAiText] = useState<string>("");
@@ -16,6 +63,7 @@ const App: React.FC = () => {
   const [selectedPlace, setSelectedPlace] = useState<HistoricalPlace | null>(null);
   const [tracking, setTracking] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [apiKeyMissing, setApiKeyMissing] = useState<boolean>(false);
   
   // New States for Driving Mode
   const [drivingMode, setDrivingMode] = useState<boolean>(false);
@@ -28,10 +76,25 @@ const App: React.FC = () => {
   const lastAnalyzedLocation = useRef<GeoLocation | null>(null);
   const wakeLockRef = useRef<any>(null);
 
+  // Check API Key on Mount
+  useEffect(() => {
+    // A verificação é feita contra a string vazia definida no vite.config.ts
+    if (!process.env.API_KEY || process.env.API_KEY === "") {
+        setApiKeyMissing(true);
+    }
+  }, []);
+
   // Initialize Audio Context
   useEffect(() => {
-    const AudioContextConstructor = window.AudioContext || (window as any).webkitAudioContext;
-    audioContextRef.current = new AudioContextConstructor({ sampleRate: 24000 });
+    try {
+      const AudioContextConstructor = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextConstructor) {
+        audioContextRef.current = new AudioContextConstructor({ sampleRate: 24000 });
+      }
+    } catch (e) {
+      console.warn("AudioContext not supported");
+    }
+    
     return () => {
       audioContextRef.current?.close();
     };
@@ -92,6 +155,8 @@ const App: React.FC = () => {
 
   // Geolocation handling
   useEffect(() => {
+    if (apiKeyMissing) return;
+
     if (!navigator.geolocation) {
       setErrorMsg("Geolocalização não suportada.");
       return;
@@ -124,7 +189,7 @@ const App: React.FC = () => {
     return () => {
       if (watchId) navigator.geolocation.clearWatch(watchId);
     };
-  }, [tracking, drivingMode, appState]);
+  }, [tracking, drivingMode, appState, apiKeyMissing]);
 
   // Main Action: Analyze Surroundings
   const handleExplore = useCallback(async (location: GeoLocation, isAuto: boolean = false) => {
@@ -172,8 +237,12 @@ const App: React.FC = () => {
         }
       }
       
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      if (err.message === 'API_KEY_MISSING') {
+          setApiKeyMissing(true);
+          return;
+      }
       if (!isAuto) setErrorMsg("Erro ao conectar à história.");
       setAppState(AppState.ERROR);
     }
@@ -205,6 +274,33 @@ const App: React.FC = () => {
         setIsGeneratingEmail(false);
     }
   };
+
+  if (apiKeyMissing) {
+      return (
+          <div className="w-full h-full flex items-center justify-center bg-history-paper p-8">
+              <div className="bg-white p-6 rounded-2xl shadow-xl max-w-md text-center border-4 border-history-gold">
+                  <h2 className="text-2xl font-serif font-bold text-history-dark mb-4">Configuração Pendente</h2>
+                  <p className="text-gray-600 mb-6">
+                      O aplicativo precisa da sua Chave de API do Google para funcionar.
+                  </p>
+                  <div className="text-left bg-gray-100 p-4 rounded-lg text-sm text-gray-700 font-mono mb-6">
+                      <p className="mb-2 font-bold">Na Vercel:</p>
+                      <p>1. Vá em Settings &gt; Environment Variables</p>
+                      <p>2. Key: <span className="text-blue-600">API_KEY</span></p>
+                      <p>3. Value: <span className="text-green-600">Sua_Chave_AI_Studio</span></p>
+                      <p className="mt-2 text-red-500 font-bold">4. Faça Redeploy!</p>
+                  </div>
+                  <a 
+                    href="https://vercel.com/dashboard" 
+                    target="_blank"
+                    className="block w-full py-3 bg-history-dark text-white font-bold rounded-xl"
+                  >
+                      Ir para Vercel
+                  </a>
+              </div>
+          </div>
+      );
+  }
 
   return (
     <div className="relative w-full h-full bg-gray-100 overflow-hidden flex flex-col">
@@ -238,7 +334,7 @@ const App: React.FC = () => {
                 setDrivingMode(false);
                 stopAudio();
             }}
-            className="absolute top-4 right-4 z-50 bg-red-500 text-white px-4 py-2 rounded-full shadow-lg font-bold text-sm hover:bg-red-600 transition-colors"
+            className="absolute top-4 right-4 z-50 bg-red-50 text-white px-4 py-2 rounded-full shadow-lg font-bold text-sm hover:bg-red-600 transition-colors"
          >
             Sair
          </button>
@@ -307,6 +403,14 @@ const App: React.FC = () => {
         />
       )}
     </div>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
   );
 };
 

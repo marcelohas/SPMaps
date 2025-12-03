@@ -1,8 +1,19 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { HistoricalPlace, GeminiResult } from "../types";
 
-// Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Inicialização Lazy (Preguiçosa) para evitar crash se a chave não existir no boot
+let aiInstance: GoogleGenAI | null = null;
+
+const getAI = (): GoogleGenAI => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error("API_KEY_MISSING");
+  }
+  if (!aiInstance) {
+    aiInstance = new GoogleGenAI({ apiKey });
+  }
+  return aiInstance;
+};
 
 // Helpers for Audio Decoding
 function decode(base64: string) {
@@ -36,6 +47,7 @@ async function decodeAudioData(
 
 export const generateVoiceNarration = async (text: string): Promise<AudioBuffer> => {
   try {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text: `Conte de forma breve e curiosa: ${text}` }] }],
@@ -70,26 +82,31 @@ export const generateVoiceNarration = async (text: string): Promise<AudioBuffer>
 export const generateEmailItinerary = async (places: HistoricalPlace[]): Promise<string> => {
   if (places.length === 0) return "Nenhum local visitado para gerar roteiro.";
 
-  const placesList = places.map(p => `- ${p.title}`).join("\n");
-  
-  const prompt = `
-    Crie um roteiro histórico curto e convidativo em formato de texto para e-mail.
+  try {
+    const ai = getAI();
+    const placesList = places.map(p => `- ${p.title}`).join("\n");
     
-    Locais visitados:
-    ${placesList}
-    
-    O e-mail deve ter:
-    Assunto: Roteiro Sampa Histórica
-    Corpo: Uma breve introdução poética sobre São Paulo, e depois a lista dos locais com uma frase curta sobre cada um.
-    Finalize convidando para a próxima viagem.
-  `;
+    const prompt = `
+      Crie um roteiro histórico curto e convidativo em formato de texto para e-mail.
+      
+      Locais visitados:
+      ${placesList}
+      
+      O e-mail deve ter:
+      Assunto: Roteiro Sampa Histórica
+      Corpo: Uma breve introdução poética sobre São Paulo, e depois a lista dos locais com uma frase curta sobre cada um.
+      Finalize convidando para a próxima viagem.
+    `;
 
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: prompt,
-  });
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+    });
 
-  return response.text || "Roteiro indisponível.";
+    return response.text || "Roteiro indisponível.";
+  } catch (e) {
+    return "Erro ao gerar roteiro. Verifique a chave de API.";
+  }
 };
 
 export const fetchHistoricalContext = async (
@@ -98,6 +115,7 @@ export const fetchHistoricalContext = async (
   isDrivingMode: boolean = false
 ): Promise<GeminiResult> => {
   try {
+    const ai = getAI();
     const modelId = "gemini-2.5-flash"; 
     
     // Prompt ajustado para modo direção: mais curto e direto
@@ -172,7 +190,10 @@ export const fetchHistoricalContext = async (
       places,
     };
 
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === 'API_KEY_MISSING') {
+        throw error;
+    }
     console.error("Gemini API Error:", error);
     throw new Error("Falha ao consultar a inteligência histórica.");
   }
