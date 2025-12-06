@@ -1,0 +1,64 @@
+# Workflow para fazer build e deploy automático no GitHub Pages
+name: Deploy to GitHub Pages
+
+on:
+  # Executa quando há push na branch main
+  push:
+    branches: ["main"]
+  
+  # Permite executar manualmente pela aba Actions
+  workflow_dispatch:
+
+# Define permissões necessárias para o GITHUB_TOKEN
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Permite apenas um deploy por vez
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  # Job de build
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+      
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Instalar dependências
+        run: npm ci
+      
+      - name: Build do projeto
+        run: npm run build
+        env:
+          # Se você precisar da API_KEY durante o build, adicione como secret no GitHub
+          # API_KEY: ${{ secrets.API_KEY }}
+      
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v4
+      
+      - name: Upload dos arquivos buildados
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist'
+
+  # Job de deploy
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy para GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
