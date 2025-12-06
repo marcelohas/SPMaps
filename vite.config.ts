@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     // URL Base para GitHub Pages
-    base: '/SPMaps/',
+    base: '/spmaps/',
     publicDir: 'public', // Pasta onde devem ficar os arquivos estáticos (manifest.json)
     plugins: [react()],
     define: {
