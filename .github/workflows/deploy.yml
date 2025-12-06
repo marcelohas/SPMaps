@@ -39,9 +39,6 @@ jobs:
       
       - name: Build do projeto
         run: npm run build
-        env:
-          # Se você precisar da API_KEY durante o build, adicione como secret no GitHub
-          # API_KEY: ${{ secrets.API_KEY }}
       
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v4
