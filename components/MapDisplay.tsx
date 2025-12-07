@@ -208,8 +208,8 @@ const MapDisplay: React.FC<MapDisplayProps> = ({ userLocation, places, onSelectP
 
   return (
     <div className="relative w-full h-full">
-      {/* Search Bar */}
-      <div className="absolute top-4 left-4 right-4 z-[1000] pointer-events-auto">
+      {/* Search Bar - Footer */}
+      <div className="absolute bottom-4 left-4 right-4 z-[1000] pointer-events-auto">
         <div className="relative">
           {/* Search Icon */}
           <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white pointer-events-none">
@@ -229,9 +229,9 @@ const MapDisplay: React.FC<MapDisplayProps> = ({ userLocation, places, onSelectP
           />
         </div>
 
-        {/* Search Results Dropdown */}
+        {/* Search Results Dropdown - Appears above search bar */}
         {showResults && searchResults.length > 0 && (
-          <div className="absolute top-16 left-0 right-0 bg-white rounded-2xl shadow-2xl max-h-64 overflow-y-auto border-2 border-gray-200">
+          <div className="absolute bottom-16 left-0 right-0 bg-white rounded-2xl shadow-2xl max-h-64 overflow-y-auto border-2 border-gray-200 mb-2">
             {searchResults.map((result, index) => (
               <div
                 key={index}
