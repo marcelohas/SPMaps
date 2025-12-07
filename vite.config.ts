@@ -5,12 +5,13 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, (process as any).cwd(), '');
 
-  // Detectar se está rodando no Vercel
-  const isVercel = process.env.VERCEL === '1';
+  // Para Vercel: base = '/'
+  // Para GitHub Pages: base = '/SPMaps/'
+  // Vercel define VERCEL=1 como variável de ambiente
+  const base = env.VERCEL ? '/' : '/SPMaps/';
 
   return {
-    // URL Base: vazio para Vercel, /SPMaps/ para GitHub Pages
-    base: isVercel ? '/' : '/SPMaps/',
+    base: base,
     publicDir: 'public',
     plugins: [react()],
     define: {
