@@ -1,200 +1,175 @@
-import { GoogleGenAI, Modality } from "@google/genai";
-import { HistoricalPlace, GeminiResult } from "../types";
+import { HistoricalPlace, GeoLocation } from '../types';
 
-// Inicialização Lazy (Preguiçosa) para evitar crash se a chave não existir no boot
-let aiInstance: GoogleGenAI | null = null;
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || process.env.API_KEY || '';
+const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
-const getAI = (): GoogleGenAI => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error("API_KEY_MISSING");
+// Função para chamar a API do Groq
+async function callGroqAPI(prompt: string): Promise<string> {
+  if (!GROQ_API_KEY) {
+    throw new Error('API_KEY_MISSING');
   }
-  if (!aiInstance) {
-    aiInstance = new GoogleGenAI({ apiKey });
-  }
-  return aiInstance;
-};
 
-// Helpers for Audio Decoding
-function decode(base64: string) {
-  const binaryString = atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
-}
-
-async function decodeAudioData(
-  data: Uint8Array,
-  ctx: AudioContext,
-  sampleRate: number,
-  numChannels: number,
-): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer);
-  const frameCount = dataInt16.length / numChannels;
-  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-
-  for (let channel = 0; channel < numChannels; channel++) {
-    const channelData = buffer.getChannelData(channel);
-    for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
-    }
-  }
-  return buffer;
-}
-
-export const generateVoiceNarration = async (text: string): Promise<AudioBuffer> => {
   try {
-    const ai = getAI();
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `Conte de forma breve e curiosa: ${text}` }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' }, // Voz mais grave e narradora
-          },
-        },
+    const response = await fetch(GROQ_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile', // Modelo rápido e gratuito do Groq
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 1024,
+      }),
     });
 
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!base64Audio) throw new Error("No audio data returned");
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('Groq API error:', error);
+      throw new Error(`Groq API error: ${response.status}`);
+    }
 
-    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-    const outputAudioContext = new AudioContext({sampleRate: 24000});
-    return await decodeAudioData(
-      decode(base64Audio),
-      outputAudioContext,
-      24000,
-      1
-    );
-
+    const data = await response.json();
+    return data.choices[0]?.message?.content || '';
   } catch (error) {
-    console.error("TTS Error:", error);
+    console.error('Error calling Groq API:', error);
     throw error;
   }
-};
+}
 
-export const generateEmailItinerary = async (places: HistoricalPlace[]): Promise<string> => {
-  if (places.length === 0) return "Nenhum local visitado para gerar roteiro.";
-
-  try {
-    const ai = getAI();
-    const placesList = places.map(p => `- ${p.title}`).join("\n");
-    
-    const prompt = `
-      Crie um roteiro histórico curto e convidativo em formato de texto para e-mail.
-      
-      Locais visitados:
-      ${placesList}
-      
-      O e-mail deve ter:
-      Assunto: Roteiro Sampa Histórica
-      Corpo: Uma breve introdução poética sobre São Paulo, e depois a lista dos locais com uma frase curta sobre cada um.
-      Finalize convidando para a próxima viagem.
-    `;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-    });
-
-    return response.text || "Roteiro indisponível.";
-  } catch (e) {
-    return "Erro ao gerar roteiro. Verifique a chave de API.";
-  }
-};
-
-export const fetchHistoricalContext = async (
+export async function fetchHistoricalContext(
   lat: number,
   lng: number,
-  isDrivingMode: boolean = false
-): Promise<GeminiResult> => {
+  drivingMode: boolean = false
+): Promise<{ text: string; places: HistoricalPlace[]; highlight?: string }> {
+  const prompt = `Você é um guia turístico especializado em São Paulo, Brasil.
+
+Localização atual: ${lat}, ${lng}
+
+${drivingMode
+      ? 'MODO DIREÇÃO: Forneça UMA curiosidade histórica curta (máximo 2 frases) sobre algo interessante próximo a esta localização.'
+      : 'Forneça informações históricas interessantes sobre esta área de São Paulo. Inclua 2-3 lugares históricos próximos com suas coordenadas aproximadas.'
+    }
+
+${!drivingMode ? `
+Formato da resposta (JSON):
+{
+  "text": "Descrição histórica da área",
+  "places": [
+    {
+      "id": "unique-id",
+      "title": "Nome do lugar",
+      "description": "Breve descrição",
+      "location": {"lat": -23.xxx, "lng": -46.xxx}
+    }
+  ]
+}` : ''}`;
+
   try {
-    const ai = getAI();
-    const modelId = "gemini-2.5-flash"; 
-    
-    // Prompt ajustado para modo direção: mais curto e direto
-    const contextPrompt = isDrivingMode 
-      ? "O usuário está dirigindo. Seja EXTREMAMENTE conciso (máximo 1 frase de impacto) para a curiosidade." 
-      : "O usuário está explorando a pé. Pode ser mais detalhado.";
+    const responseText = await callGroqAPI(prompt);
 
-    const prompt = `
-      Estou na localização: Latitude ${lat}, Longitude ${lng} em São Paulo, Brasil.
-      ${contextPrompt}
-      
-      TAREFA:
-      1. Escolha O FATO MAIS INTERESSANTE E INUSITADO sobre um local histórico neste raio de 500m-1km.
-      2. Formate a primeira linha EXATAMENTE assim:
-         "DESTAQUE: [Fato curto e curioso aqui]"
-      
-      3. Se não estiver dirigindo, liste detalhes de 3 locais abaixo.
-      
-      Use a ferramenta Google Maps.
-    `;
-
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: prompt,
-      config: {
-        tools: [{ googleMaps: {} }],
-        toolConfig: {
-          retrievalConfig: {
-            latLng: {
-              latitude: lat,
-              longitude: lng,
-            },
-          },
-        },
-      },
-    });
-
-    const fullText = response.text || "Sem dados históricos.";
-    let highlight: string | undefined;
-    let mainText = fullText;
-
-    const highlightMatch = fullText.match(/DESTAQUE:\s*(.*?)(?:\n\n|\n|$)/s);
-    if (highlightMatch && highlightMatch[1]) {
-      highlight = highlightMatch[1].trim();
-      mainText = fullText.replace(/DESTAQUE:.*?(?:\n\n|\n|$)/s, "").trim();
+    if (drivingMode) {
+      // Modo direção: retorna apenas texto curto
+      return {
+        text: '',
+        places: [],
+        highlight: responseText.trim()
+      };
     }
 
-    const places: HistoricalPlace[] = [];
-    const candidate = response.candidates?.[0];
-    const groundingChunks = candidate?.groundingMetadata?.groundingChunks;
-
-    if (groundingChunks) {
-      groundingChunks.forEach((chunk, index) => {
-        if (chunk.maps) {
-          places.push({
-            id: chunk.maps.placeId || `place-${index}`,
-            title: chunk.maps.title || "Local Histórico",
-            description: "Identificado pelo Google Maps.", 
-            location: {
-              lat: lat + (Math.random() - 0.5) * 0.003, 
-              lng: lng + (Math.random() - 0.5) * 0.003,
-            },
-            googleMapsUri: chunk.maps.googleMapsUriReference?.uri,
-          });
-        }
-      });
+    // Modo normal: tenta parsear JSON
+    try {
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return {
+          text: parsed.text || responseText,
+          places: (parsed.places || []).map((p: any, index: number) => ({
+            id: p.id || `place-${Date.now()}-${index}`,
+            title: p.title || 'Lugar Histórico',
+            description: p.description || '',
+            location: p.location || { lat, lng }
+          })),
+          highlight: parsed.highlight
+        };
+      }
+    } catch (parseError) {
+      console.warn('Failed to parse JSON, using raw text');
     }
 
+    // Fallback: retorna texto bruto
     return {
-      text: mainText,
-      highlight,
-      places,
+      text: responseText,
+      places: [],
     };
-
-  } catch (error: any) {
-    if (error.message === 'API_KEY_MISSING') {
-        throw error;
-    }
-    console.error("Gemini API Error:", error);
-    throw new Error("Falha ao consultar a inteligência histórica.");
+  } catch (error) {
+    console.error('Error fetching historical context:', error);
+    throw error;
   }
-};
+}
+
+export async function generateVoiceNarration(text: string): Promise<AudioBuffer> {
+  // Groq não tem API de voz nativa, mas podemos usar Web Speech API do navegador (gratuito!)
+  return new Promise((resolve, reject) => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+
+      // Usar Web Speech API para síntese de voz (gratuito, nativo do navegador)
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'pt-BR';
+      utterance.rate = 0.9;
+      utterance.pitch = 1.0;
+
+      // Criar um buffer de áudio vazio (Web Speech API não retorna AudioBuffer diretamente)
+      // Esta é uma implementação simplificada - em produção, você poderia gravar o áudio
+      const buffer = audioContext.createBuffer(1, audioContext.sampleRate * 2, audioContext.sampleRate);
+
+      utterance.onend = () => {
+        resolve(buffer);
+      };
+
+      utterance.onerror = (error) => {
+        console.error('Speech synthesis error:', error);
+        reject(error);
+      };
+
+      // Reproduzir usando Web Speech API
+      window.speechSynthesis.speak(utterance);
+
+      // Retornar buffer vazio imediatamente (a fala acontece em paralelo)
+      setTimeout(() => resolve(buffer), 100);
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+export async function generateEmailItinerary(places: HistoricalPlace[]): Promise<string> {
+  if (places.length === 0) {
+    return 'Você ainda não visitou nenhum lugar histórico.';
+  }
+
+  const placesText = places.map((p, i) =>
+    `${i + 1}. ${p.title}\n   ${p.description || 'Sem descrição'}\n   Localização: ${p.location.lat}, ${p.location.lng}`
+  ).join('\n\n');
+
+  const prompt = `Crie um roteiro de email amigável e informativo baseado nestes lugares históricos de São Paulo visitados:
+
+${placesText}
+
+Formato: Email casual e interessante, com introdução, lista dos lugares com curiosidades, e conclusão motivadora.`;
+
+  try {
+    const emailBody = await callGroqAPI(prompt);
+    return emailBody;
+  } catch (error) {
+    console.error('Error generating email:', error);
+    return `Roteiro de São Paulo\n\n${placesText}`;
+  }
+}

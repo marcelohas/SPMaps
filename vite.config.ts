@@ -5,12 +5,16 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, (process as any).cwd(), '');
 
+  // Detectar se está rodando no Vercel
+  const isVercel = process.env.VERCEL === '1';
+
   return {
-    // URL Base para GitHub Pages
-    base: '/SPMaps/',
-    publicDir: 'public', // Pasta onde devem ficar os arquivos estáticos (manifest.json)
+    // URL Base: vazio para Vercel, /SPMaps/ para GitHub Pages
+    base: isVercel ? '/' : '/SPMaps/',
+    publicDir: 'public',
     plugins: [react()],
     define: {
+      // API_KEY vem das variáveis de ambiente do Vercel ou .env.local
       'process.env.API_KEY': JSON.stringify(env.API_KEY || ""),
     },
     build: {

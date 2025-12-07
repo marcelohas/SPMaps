@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import L from 'leaflet';
+import 'leaflet-routing-machine';
 import { GeoLocation, HistoricalPlace } from '../types';
 
 interface MapDisplayProps {
@@ -7,194 +9,234 @@ interface MapDisplayProps {
   onSelectPlace: (place: HistoricalPlace) => void;
 }
 
-declare global {
-  interface Window {
-    google: any;
-    initMap: () => void;
-  }
-}
-
 const MapDisplay: React.FC<MapDisplayProps> = ({ userLocation, places, onSelectPlace }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const googleMapRef = useRef<any>(null);
-  if (window.google && window.google.maps) {
-    setMapLoaded(true);
-    return;
-  }
+  const leafletMapRef = useRef<L.Map | null>(null);
+  const userMarkerRef = useRef<L.Marker | null>(null);
+  const markersRef = useRef<L.Marker[]>([]);
+  const routingControlRef = useRef<L.Routing.Control | null>(null);
 
-  const script = document.createElement('script');
-  script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,marker`;
-  script.async = true;
-  script.defer = true;
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [showResults, setShowResults] = useState(false);
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
 
-  script.onload = () => {
-    setMapLoaded(true);
-  };
+  // Initialize Map
+  useEffect(() => {
+    if (mapRef.current && !leafletMapRef.current) {
+      const initialLat = userLocation ? userLocation.lat : -23.5505;
+      const initialLng = userLocation ? userLocation.lng : -46.6333;
 
-  document.head.appendChild(script);
-}, [apiKey]);
-
-// Initialize Map
-useEffect(() => {
-  if (mapLoaded && mapRef.current && !googleMapRef.current) {
-    const initialLat = userLocation ? userLocation.lat : -23.5505;
-    const initialLng = userLocation ? userLocation.lng : -46.6333;
-
-    googleMapRef.current = new window.google.maps.Map(mapRef.current, {
-      center: { lat: initialLat, lng: initialLng },
-      zoom: 17,
-      disableDefaultUI: true, // Cleaner interface for driving
-      zoomControl: false,
-      mapId: "DEMO_MAP_ID",
-      heading: 0,
-      tilt: 0,
-      styles: [
-        {
-          "featureType": "poi",
-          "elementType": "labels",
-          "stylers": [
-            { "visibility": "off" }
-          ]
-        }
-      ]
-    });
-
-    // Add Traffic Layer
-    const trafficLayer = new window.google.maps.TrafficLayer();
-    trafficLayer.setMap(googleMapRef.current);
-
-    // Initialize Directions
-    directionsServiceRef.current = new window.google.maps.DirectionsService();
-    directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
-      map: googleMapRef.current,
-      suppressMarkers: false, // Let Google show A/B markers
-      polylineOptions: {
-        strokeColor: "#4285F4",
-        strokeWeight: 6,
-        strokeOpacity: 0.8
-      }
-    });
-
-    // Initialize Search Box
-    if (inputRef.current) {
-      searchBoxRef.current = new window.google.maps.places.SearchBox(inputRef.current);
-      // Bias the SearchBox results towards current map's viewport.
-      googleMapRef.current.addListener("bounds_changed", () => {
-        searchBoxRef.current.setBounds(googleMapRef.current.getBounds());
+      // Create map with OpenStreetMap tiles
+      leafletMapRef.current = L.map(mapRef.current, {
+        center: [initialLat, initialLng],
+        zoom: 17,
+        zoomControl: false,
       });
 
-      searchBoxRef.current.addListener("places_changed", () => {
-        const places = searchBoxRef.current.getPlaces();
-        if (!places || places.length === 0) {
-        }
-      }
-}, [mapLoaded]);
+      // Add OpenStreetMap tiles (free, no API key needed!)
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19,
+      }).addTo(leafletMapRef.current);
 
-const calculateRoute = (destinationParam: any) => {
-  if (!userLocation || !directionsServiceRef.current) return;
-
-  const origin = { lat: userLocation.lat, lng: userLocation.lng };
-
-  directionsServiceRef.current.route(
-    {
-      origin: origin,
-      destination: destinationParam,
-      travelMode: window.google.maps.TravelMode.DRIVING,
-    },
-    (result: any, status: any) => {
-      if (status === window.google.maps.DirectionsStatus.OK) {
-        directionsRendererRef.current.setDirections(result);
-      } else {
-        console.error("Directions request failed due to " + status);
-      }
+      // Add zoom control to top right
+      L.control.zoom({ position: 'topright' }).addTo(leafletMapRef.current);
     }
-  );
-};
 
-// Update User Location & Heading
-useEffect(() => {
-  if (!googleMapRef.current || !userLocation || !window.google) return;
-
-  const pos = { lat: userLocation.lat, lng: userLocation.lng };
-
-  if (!userMarkerRef.current) {
-    // Create a navigation arrow for user
-    const icon = {
-      path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-      scale: 6,
-      fillColor: "#4285F4",
-      fillOpacity: 1,
-      strokeWeight: 2,
-      strokeColor: "#FFFFFF",
-      rotation: userLocation.heading || 0
+    return () => {
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+      }
     };
+  }, []);
 
-    userMarkerRef.current = new window.google.maps.Marker({
-      position: pos,
-      map: googleMapRef.current,
-      icon: icon,
-      title: "Você está aqui",
-      zIndex: 999
-    });
-  } else {
-    markersRef.current.forEach(marker => marker.setMap(null));
+  // Update User Location Marker
+  useEffect(() => {
+    if (!leafletMapRef.current || !userLocation) return;
+
+    const pos: L.LatLngExpression = [userLocation.lat, userLocation.lng];
+
+    if (!userMarkerRef.current) {
+      // Create custom user marker (blue dot)
+      const userIcon = L.divIcon({
+        className: 'user-marker',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10],
+      });
+
+      userMarkerRef.current = L.marker(pos, { icon: userIcon })
+        .addTo(leafletMapRef.current)
+        .bindPopup('Você está aqui');
+    } else {
+      // Update position
+      userMarkerRef.current.setLatLng(pos);
+    }
+
+    // Center map on user (smooth pan)
+    leafletMapRef.current.panTo(pos);
+  }, [userLocation]);
+
+  // Update Historical Place Markers
+  useEffect(() => {
+    if (!leafletMapRef.current) return;
+
+    // Clear existing markers
+    markersRef.current.forEach(marker => marker.remove());
     markersRef.current = [];
 
-    // Add new markers
+    // Add new markers for historical places
     places.forEach(place => {
-      const marker = new window.google.maps.Marker({
-        position: { lat: place.location.lat, lng: place.location.lng },
-        map: googleMapRef.current,
-        title: place.title,
-        label: {
-          text: "🏛️",
-          fontFamily: "Material Icons",
-          fontSize: "24px",
-        },
-        icon: {
-          path: window.google.maps.SymbolPath.CIRCLE,
-          scale: 18,
-          fillColor: "#d4af37", // History Gold
-          fillOpacity: 1,
-          strokeWeight: 2,
-          strokeColor: "#FFFFFF",
-          labelOrigin: new window.google.maps.Point(0, 0)
-        }
+      const placeIcon = L.divIcon({
+        className: 'place-marker',
+        html: '🏛️',
+        iconSize: [30, 30],
+        iconAnchor: [15, 15],
       });
 
-      marker.addListener("click", () => {
+      const marker = L.marker([place.location.lat, place.location.lng], { icon: placeIcon })
+        .addTo(leafletMapRef.current!)
+        .bindPopup(`<strong>${place.title}</strong><br>${place.description || ''}`);
+
+      marker.on('click', () => {
         onSelectPlace(place);
+        // Calculate route when marker is clicked
+        if (userLocation) {
+          calculateRoute([userLocation.lat, userLocation.lng], [place.location.lat, place.location.lng]);
+        }
       });
 
       markersRef.current.push(marker);
     });
-  }, [places, onSelectPlace]);
+  }, [places, onSelectPlace, userLocation]);
 
-if (!apiKey) {
+  // Calculate Route using Leaflet Routing Machine
+  const calculateRoute = (start: L.LatLngExpression, end: L.LatLngExpression) => {
+    if (!leafletMapRef.current) return;
+
+    // Remove existing route
+    if (routingControlRef.current) {
+      leafletMapRef.current.removeControl(routingControlRef.current);
+    }
+
+    // Create new route
+    routingControlRef.current = L.Routing.control({
+      waypoints: [
+        L.latLng(start as [number, number]),
+        L.latLng(end as [number, number])
+      ],
+      routeWhileDragging: false,
+      addWaypoints: false,
+      draggableWaypoints: false,
+      fitSelectedRoutes: true,
+      showAlternatives: false,
+      lineOptions: {
+        styles: [{ color: '#4285F4', weight: 6, opacity: 0.8 }],
+        extendToWaypoints: true,
+        missingRouteTolerance: 0
+      },
+      show: false, // Hide the instruction panel
+      createMarker: () => null, // Don't create default markers
+    }).addTo(leafletMapRef.current);
+  };
+
+  // Address Search using Nominatim (OpenStreetMap's free geocoding service)
+  const handleSearch = async (query: string) => {
+    if (!query || query.length < 3) {
+      setSearchResults([]);
+      setShowResults(false);
+      return;
+    }
+
+    // Clear previous timeout
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+
+    // Debounce search (Nominatim has rate limit of 1 req/sec)
+    const timeout = setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?` +
+          `q=${encodeURIComponent(query)}&` +
+          `format=json&` +
+          `limit=5&` +
+          `countrycodes=br&` +
+          `viewbox=-46.826,-23.357,-46.365,-23.796&` + // São Paulo bounding box
+          `bounded=1`
+        );
+
+        const results = await response.json();
+        setSearchResults(results);
+        setShowResults(true);
+      } catch (error) {
+        console.error('Search error:', error);
+        setSearchResults([]);
+      }
+    }, 1000); // 1 second debounce to respect rate limits
+
+    setSearchTimeout(timeout);
+  };
+
+  // Handle search result selection
+  const handleSelectResult = (result: any) => {
+    if (!leafletMapRef.current || !userLocation) return;
+
+    const lat = parseFloat(result.lat);
+    const lng = parseFloat(result.lon);
+
+    // Pan to location
+    leafletMapRef.current.setView([lat, lng], 17);
+
+    // Calculate route
+    calculateRoute([userLocation.lat, userLocation.lng], [lat, lng]);
+
+    // Clear search
+    setShowResults(false);
+    if (inputRef.current) {
+      inputRef.current.value = result.display_name;
+    }
+  };
+
   return (
-    <div className="w-full h-full flex items-center justify-center bg-gray-100">
-      <p className="text-gray-500">Mapa indisponível (Chave não configurada)</p>
+    <div className="relative w-full h-full">
+      {/* Search Bar */}
+      <div className="absolute top-28 left-4 right-16 z-10 pointer-events-auto">
+        <input
+          ref={inputRef}
+          type="text"
+          placeholder="Para onde vamos? (Busca por endereço)"
+          onChange={(e) => handleSearch(e.target.value)}
+          onFocus={() => searchResults.length > 0 && setShowResults(true)}
+          className="w-full h-12 px-4 rounded-xl shadow-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-sans text-lg bg-white/95 backdrop-blur"
+        />
+
+        {/* Search Results Dropdown */}
+        {showResults && searchResults.length > 0 && (
+          <div className="absolute top-14 left-0 right-0 bg-white rounded-xl shadow-xl max-h-64 overflow-y-auto z-20">
+            {searchResults.map((result, index) => (
+              <div
+                key={index}
+                onClick={() => handleSelectResult(result)}
+                className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+              >
+                <p className="text-sm font-medium text-gray-900">{result.display_name}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Map Container */}
+      <div ref={mapRef} className="w-full h-full" />
+
+      {/* Attribution Notice */}
+      <div className="absolute bottom-2 right-2 bg-white/90 px-2 py-1 rounded text-xs text-gray-600 pointer-events-none z-10">
+        Mapas: OpenStreetMap | Rotas: OSRM
+      </div>
     </div>
   );
-}
-
-return (
-  <div className="relative w-full h-full">
-    {/* Navigation Search Bar */}
-    <div className="absolute top-28 left-4 right-16 z-10 pointer-events-auto">
-      <input
-        ref={inputRef}
-        type="text"
-        placeholder="Para onde vamos? (Navegação GPS)"
-        className="w-full h-12 px-4 rounded-xl shadow-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-sans text-lg bg-white/95 backdrop-blur"
-      />
-    </div>
-
-    {/* Map Container */}
-    <div ref={mapRef} className="w-full h-full" />
-  </div>
-);
 };
 
 export default MapDisplay;
