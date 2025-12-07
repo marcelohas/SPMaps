@@ -312,7 +312,7 @@ const AppContent: React.FC = () => {
       <div className={`absolute top-0 left-0 right-0 z-30 p-4 transition-all duration-300 ${drivingMode ? '-translate-y-full' : 'translate-y-0'}`}>
         <div className="bg-white/90 backdrop-blur shadow-lg rounded-2xl p-3 pointer-events-auto">
           <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-history-gold rounded-full flex items-center justify-center text-white font-bold">
                 SP
               </div>
@@ -320,24 +320,24 @@ const AppContent: React.FC = () => {
                 <h1 className="text-sm font-bold text-gray-900 leading-tight">Sampa Histórica</h1>
                 <p className="text-[10px] text-gray-500 uppercase tracking-wide">AI Copilot</p>
               </div>
-
-              {/* Search Button next to logo */}
-              <button
-                onClick={() => {
-                  const address = prompt('Digite o endereço em São Paulo:');
-                  if (address) {
-                    console.log('Search:', address);
-                    // TODO: Implement search functionality
-                  }
-                }}
-                className="ml-2 h-8 px-3 bg-history-gold hover:bg-yellow-600 text-white rounded-lg font-sans text-xs font-semibold transition-colors flex items-center gap-1"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                Buscar
-              </button>
             </div>
+
+            {/* Search Button - Center */}
+            <button
+              onClick={() => {
+                const address = prompt('Digite o endereço em São Paulo:');
+                if (address) {
+                  console.log('Search:', address);
+                  // TODO: Implement search functionality
+                }
+              }}
+              className="h-9 px-4 bg-history-gold hover:bg-yellow-600 text-white rounded-xl font-sans text-sm font-semibold transition-colors flex items-center gap-2 shadow-md"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              Buscar Endereço
+            </button>
 
             <button
               onClick={() => setDrivingMode(true)}
