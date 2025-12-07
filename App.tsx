@@ -341,6 +341,12 @@ const AppContent: React.FC = () => {
             <input
               type="text"
               placeholder="Buscar endereço em São Paulo..."
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  // TODO: Implement search functionality
+                  console.log('Search:', e.currentTarget.value);
+                }
+              }}
               className="w-full h-10 pl-10 pr-4 rounded-xl border-2 border-history-gold/30 focus:outline-none focus:ring-2 focus:ring-history-gold focus:border-transparent font-sans text-sm bg-white text-gray-900 placeholder-gray-400"
             />
           </div>
