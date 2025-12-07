@@ -311,8 +311,8 @@ const AppContent: React.FC = () => {
       {/* Header / Top Bar with Integrated Search */}
       <div className={`absolute top-0 left-0 right-0 z-30 p-4 transition-all duration-300 ${drivingMode ? '-translate-y-full' : 'translate-y-0'}`}>
         <div className="bg-white/90 backdrop-blur shadow-lg rounded-2xl p-3 pointer-events-auto">
-          <div className="flex justify-between items-center mb-3">
-            <div className="flex items-center space-x-2">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center space-x-3">
               <div className="w-8 h-8 bg-history-gold rounded-full flex items-center justify-center text-white font-bold">
                 SP
               </div>
@@ -320,6 +320,23 @@ const AppContent: React.FC = () => {
                 <h1 className="text-sm font-bold text-gray-900 leading-tight">Sampa Histórica</h1>
                 <p className="text-[10px] text-gray-500 uppercase tracking-wide">AI Copilot</p>
               </div>
+
+              {/* Search Button next to logo */}
+              <button
+                onClick={() => {
+                  const address = prompt('Digite o endereço em São Paulo:');
+                  if (address) {
+                    console.log('Search:', address);
+                    // TODO: Implement search functionality
+                  }
+                }}
+                className="ml-2 h-8 px-3 bg-history-gold hover:bg-yellow-600 text-white rounded-lg font-sans text-xs font-semibold transition-colors flex items-center gap-1"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                Buscar
+              </button>
             </div>
 
             <button
@@ -329,42 +346,6 @@ const AppContent: React.FC = () => {
               <span>🚗 Modo Direção</span>
             </button>
           </div>
-
-          {/* Integrated Search Bar */}
-          <div className="relative flex gap-2">
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-history-gold pointer-events-none">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-
-            <input
-              type="text"
-              placeholder="Buscar endereço em São Paulo..."
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') {
-                  // TODO: Implement search functionality
-                  console.log('Search:', e.currentTarget.value);
-                }
-              }}
-              className="w-full h-10 pl-10 pr-4 rounded-xl border-2 border-history-gold/30 focus:outline-none focus:ring-2 focus:ring-history-gold focus:border-transparent font-sans text-sm bg-white text-gray-900 placeholder-gray-400"
-            />
-          </div>
-
-          <button
-            onClick={() => {
-              const input = document.querySelector('input[placeholder="Buscar endereço em São Paulo..."]') as HTMLInputElement;
-              if (input) {
-                console.log('Search:', input.value);
-              }
-            }}
-            className="h-10 px-4 bg-history-gold hover:bg-yellow-600 text-white rounded-xl font-sans text-sm font-semibold transition-colors flex items-center gap-2"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            Buscar
-          </button>
         </div>
       </div>
     </div>
