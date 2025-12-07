@@ -331,7 +331,7 @@ const AppContent: React.FC = () => {
           </div>
 
           {/* Integrated Search Bar */}
-          <div className="relative">
+          <div className="relative flex gap-2">
             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-history-gold pointer-events-none">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -350,85 +350,113 @@ const AppContent: React.FC = () => {
               className="w-full h-10 pl-10 pr-4 rounded-xl border-2 border-history-gold/30 focus:outline-none focus:ring-2 focus:ring-history-gold focus:border-transparent font-sans text-sm bg-white text-gray-900 placeholder-gray-400"
             />
           </div>
-        </div>
-      </div>
 
-      {/* Driving Mode Exit Button */}
-      {drivingMode && (
-        <button
-          onClick={() => {
-            setDrivingMode(false);
-            stopAudio();
-          }}
-          className="absolute top-4 right-4 z-50 bg-red-50 text-white px-4 py-2 rounded-full shadow-lg font-bold text-sm hover:bg-red-600 transition-colors"
-        >
-          Sair
-        </button>
-      )}
-
-      {/* Map Layer */}
-      <div className="absolute inset-0 z-0">
-        <MapDisplay
-          userLocation={userLocation}
-          places={places}
-          onSelectPlace={setSelectedPlace}
-        />
-      </div>
-
-      {/* Driving Overlay (HUD) */}
-      {drivingMode && (
-        <DrivingOverlay
-          highlightText={highlightText}
-          isPlaying={isPlaying}
-          onStopAudio={stopAudio}
-          onReplayAudio={() => audioBuffer && playAudio(audioBuffer)}
-        />
-      )}
-
-      {/* Standard Mode Pop-up */}
-      {!drivingMode && showHighlightPopup && highlightText && (
-        <DidYouKnowPopup
-          text={highlightText}
-          onClose={() => setShowHighlightPopup(false)}
-        />
-      )}
-
-      {/* Error Toast */}
-      {errorMsg && (
-        <div className="absolute top-24 left-4 right-4 z-50 bg-red-50 text-red-600 p-3 rounded-xl border border-red-200 shadow-lg text-sm text-center">
-          {errorMsg}
-        </div>
-      )}
-
-      {/* Standard Mode Action Button */}
-      {!drivingMode && !selectedPlace && !showHighlightPopup && appState !== AppState.ANALYZING && (
-        <div className="absolute bottom-64 left-0 right-0 z-10 flex justify-center pointer-events-none">
           <button
-            onClick={() => userLocation && handleExplore(userLocation)}
-            disabled={!userLocation}
-            className="pointer-events-auto shadow-2xl bg-history-gold hover:bg-yellow-600 text-white font-serif font-bold text-lg py-3 px-8 rounded-full transform transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 ring-4 ring-white/30"
+            onClick={() => {
+              const input = document.querySelector('input[placeholder="Buscar endereço em São Paulo..."]') as HTMLInputElement;
+              if (input) {
+                console.log('Search:', input.value);
+              }
+            }}
+            className="h-10 px-4 bg-history-gold hover:bg-yellow-600 text-white rounded-xl font-sans text-sm font-semibold transition-colors flex items-center gap-2"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-            <span>Explorar História Aqui</span>
+            Buscar
           </button>
         </div>
-      )}
-
-      {/* Standard Mode Info Panel */}
-      {!drivingMode && (
-        <HistoryPanel
-          text={aiText}
-          selectedPlace={selectedPlace}
-          loading={appState === AppState.ANALYZING}
-          onClosePlace={() => setSelectedPlace(null)}
-          places={places}
-          onGenerateEmail={handleEmailGeneration}
-          isGeneratingEmail={isGeneratingEmail}
-        />
-      )}
+      </div>
     </div>
+
+      {/* Driving Mode Exit Button */ }
+  {
+    drivingMode && (
+      <button
+        onClick={() => {
+          setDrivingMode(false);
+          stopAudio();
+        }}
+        className="absolute top-4 right-4 z-50 bg-red-50 text-white px-4 py-2 rounded-full shadow-lg font-bold text-sm hover:bg-red-600 transition-colors"
+      >
+        Sair
+      </button>
+    )
+  }
+
+  {/* Map Layer */ }
+  <div className="absolute inset-0 z-0">
+    <MapDisplay
+      userLocation={userLocation}
+      places={places}
+      onSelectPlace={setSelectedPlace}
+    />
+  </div>
+
+  {/* Driving Overlay (HUD) */ }
+  {
+    drivingMode && (
+      <DrivingOverlay
+        highlightText={highlightText}
+        isPlaying={isPlaying}
+        onStopAudio={stopAudio}
+        onReplayAudio={() => audioBuffer && playAudio(audioBuffer)}
+      />
+    )
+  }
+
+  {/* Standard Mode Pop-up */ }
+  {
+    !drivingMode && showHighlightPopup && highlightText && (
+      <DidYouKnowPopup
+        text={highlightText}
+        onClose={() => setShowHighlightPopup(false)}
+      />
+    )
+  }
+
+  {/* Error Toast */ }
+  {
+    errorMsg && (
+      <div className="absolute top-24 left-4 right-4 z-50 bg-red-50 text-red-600 p-3 rounded-xl border border-red-200 shadow-lg text-sm text-center">
+        {errorMsg}
+      </div>
+    )
+  }
+
+  {/* Standard Mode Action Button */ }
+  {
+    !drivingMode && !selectedPlace && !showHighlightPopup && appState !== AppState.ANALYZING && (
+      <div className="absolute bottom-64 left-0 right-0 z-10 flex justify-center pointer-events-none">
+        <button
+          onClick={() => userLocation && handleExplore(userLocation)}
+          disabled={!userLocation}
+          className="pointer-events-auto shadow-2xl bg-history-gold hover:bg-yellow-600 text-white font-serif font-bold text-lg py-3 px-8 rounded-full transform transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 ring-4 ring-white/30"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+          </svg>
+          <span>Explorar História Aqui</span>
+        </button>
+      </div>
+    )
+  }
+
+  {/* Standard Mode Info Panel */ }
+  {
+    !drivingMode && (
+      <HistoryPanel
+        text={aiText}
+        selectedPlace={selectedPlace}
+        loading={appState === AppState.ANALYZING}
+        onClosePlace={() => setSelectedPlace(null)}
+        places={places}
+        onGenerateEmail={handleEmailGeneration}
+        isGeneratingEmail={isGeneratingEmail}
+      />
+    )
+  }
+    </div >
   );
 };
 
