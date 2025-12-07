@@ -209,24 +209,34 @@ const MapDisplay: React.FC<MapDisplayProps> = ({ userLocation, places, onSelectP
   return (
     <div className="relative w-full h-full">
       {/* Search Bar */}
-      <div className="absolute top-4 left-4 right-4 z-[100] pointer-events-auto">
-        <input
-          ref={inputRef}
-          type="text"
-          placeholder="Para onde vamos? (Busca por endereço)"
-          onChange={(e) => handleSearch(e.target.value)}
-          onFocus={() => searchResults.length > 0 && setShowResults(true)}
-          className="w-full h-12 px-4 rounded-xl shadow-2xl border-4 border-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-500 font-sans text-lg bg-blue-500 text-white placeholder-white"
-        />
+      <div className="absolute top-4 left-4 right-4 z-[1000] pointer-events-auto">
+        <div className="relative">
+          {/* Search Icon */}
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white pointer-events-none">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder="Para onde vamos? Digite um endereço..."
+            onChange={(e) => handleSearch(e.target.value)}
+            onFocus={() => searchResults.length > 0 && setShowResults(true)}
+            className="w-full h-14 pl-14 pr-4 rounded-2xl shadow-2xl border-4 border-white focus:outline-none focus:ring-4 focus:ring-history-gold font-sans text-lg bg-gradient-to-r from-blue-600 to-blue-500 text-white placeholder-white/90 backdrop-blur-sm"
+            style={{ boxShadow: '0 10px 40px rgba(0,0,0,0.3)' }}
+          />
+        </div>
 
         {/* Search Results Dropdown */}
         {showResults && searchResults.length > 0 && (
-          <div className="absolute top-14 left-0 right-0 bg-white rounded-xl shadow-xl max-h-64 overflow-y-auto z-20">
+          <div className="absolute top-16 left-0 right-0 bg-white rounded-2xl shadow-2xl max-h-64 overflow-y-auto border-2 border-gray-200">
             {searchResults.map((result, index) => (
               <div
                 key={index}
                 onClick={() => handleSelectResult(result)}
-                className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors"
               >
                 <p className="text-sm font-medium text-gray-900">{result.display_name}</p>
               </div>

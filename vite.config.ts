@@ -15,8 +15,9 @@ export default defineConfig(({ mode }) => {
     publicDir: 'public',
     plugins: [react()],
     define: {
-      // API_KEY vem das variáveis de ambiente do Vercel ou .env.local
-      'process.env.API_KEY': JSON.stringify(env.API_KEY || ""),
+      // API_KEY vem das variáveis de ambiente do Vercel
+      // Para GitHub Pages, sempre usa string vazia (usuário deve configurar no Vercel)
+      'process.env.API_KEY': JSON.stringify(env.VERCEL ? env.API_KEY || "" : ""),
     },
     build: {
       outDir: 'dist',
