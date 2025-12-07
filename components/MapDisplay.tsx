@@ -216,7 +216,7 @@ const MapDisplay: React.FC<MapDisplayProps> = ({ userLocation, places, onSelectP
           placeholder="Para onde vamos? (Busca por endereço)"
           onChange={(e) => handleSearch(e.target.value)}
           onFocus={() => searchResults.length > 0 && setShowResults(true)}
-          className="w-full h-12 px-4 rounded-xl shadow-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-sans text-lg bg-white/95 backdrop-blur"
+          className="w-full h-12 px-4 rounded-xl shadow-2xl border-4 border-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-500 font-sans text-lg bg-blue-500 text-white placeholder-white"
         />
 
         {/* Search Results Dropdown */}
