@@ -7,9 +7,10 @@ interface MapDisplayProps {
   userLocation: GeoLocation | null;
   places: HistoricalPlace[];
   onSelectPlace: (place: HistoricalPlace) => void;
+  onRouteCalculated?: (destination: GeoLocation) => void;
 }
 
-const MapDisplay: React.FC<MapDisplayProps> = ({ userLocation, places, onSelectPlace }) => {
+const MapDisplay: React.FC<MapDisplayProps> = ({ userLocation, places, onSelectPlace, onRouteCalculated }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
@@ -139,6 +140,12 @@ const MapDisplay: React.FC<MapDisplayProps> = ({ userLocation, places, onSelectP
       show: false, // Hide the instruction panel
       createMarker: () => null, // Don't create default markers
     }).addTo(leafletMapRef.current);
+
+    // Notify parent component about destination
+    if (onRouteCalculated) {
+      const endCoords = end as [number, number];
+      onRouteCalculated({ lat: endCoords[0], lng: endCoords[1] });
+    }
   };
 
   // Address Search using Nominatim (OpenStreetMap's free geocoding service)
