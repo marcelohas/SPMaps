@@ -209,7 +209,7 @@ const MapDisplay: React.FC<MapDisplayProps> = ({ userLocation, places, onSelectP
   return (
     <div className="relative w-full h-full">
       {/* Search Bar */}
-      <div className="absolute top-4 left-4 right-4 z-50 pointer-events-auto">
+      <div className="absolute top-4 left-4 right-4 z-[100] pointer-events-auto">
         <input
           ref={inputRef}
           type="text"
