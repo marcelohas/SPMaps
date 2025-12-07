@@ -20,7 +20,7 @@ const MapDisplay: React.FC<MapDisplayProps> = ({ userLocation, places, onSelectP
 
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showResults, setShowResults] = useState(false);
-  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [searchTimeout, setSearchTimeout] = useState<number | null>(null);
 
   // Initialize Map
   useEffect(() => {
